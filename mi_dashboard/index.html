@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>TP05 · Telemetría del robot</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-dot"></span>
+      <div>
+        <h1>Telemetría en vivo</h1>
+        <p id="robotSubtitle" class="muted">sin conectar</p>
+      </div>
+    </div>
+
+    <div class="connect-form">
+      <label class="field">
+        <span>Host</span>
+        <input id="hostInput" type="text" value="10.0.0.5" spellcheck="false" />
+      </label>
+      <label class="field field-port">
+        <span>Puerto</span>
+        <input id="portInput" type="number" value="8001" />
+      </label>
+      <button id="connectBtn" class="btn btn-primary">Conectar</button>
+      <button id="disconnectBtn" class="btn btn-ghost" disabled>Desconectar</button>
+      <div id="statusPill" class="status-pill status-idle">
+        <span class="status-dot"></span>
+        <span id="statusText">Sin conectar</span>
+      </div>
+    </div>
+  </header>
+
+  <div id="errorBanner" class="error-banner hidden"></div>
+
+  <main class="dashboard">
+
+    <!-- KPIs -->
+    <section class="kpis">
+      <div class="kpi">
+        <span class="kpi-label">Modelo</span>
+        <span id="kpiModelo" class="kpi-value">—</span>
+      </div>
+      <div class="kpi">
+        <span class="kpi-label">Motores</span>
+        <span id="kpiMotores" class="kpi-value">—</span>
+      </div>
+      <div class="kpi">
+        <span class="kpi-label">Temp. máxima</span>
+        <span id="kpiTempMax" class="kpi-value">—</span>
+      </div>
+      <div class="kpi">
+        <span class="kpi-label">Torque máximo</span>
+        <span id="kpiTorqueMax" class="kpi-value">—</span>
+      </div>
+      <div class="kpi">
+        <span class="kpi-label">Tiempo sim.</span>
+        <span id="kpiTs" class="kpi-value">—</span>
+      </div>
+      <div class="kpi">
+        <span class="kpi-label">Mensajes/seg</span>
+        <span id="kpiRate" class="kpi-value">—</span>
+      </div>
+    </section>
+
+    <!-- Fila principal -->
+    <section class="grid-main">
+
+      <!-- Ángulos -->
+      <div class="panel panel-angles">
+        <div class="panel-head">
+          <h2>Ángulos de motor</h2>
+          <div class="panel-actions">
+            <button id="selectAllBtn" class="btn btn-mini">Todos</button>
+            <button id="selectNoneBtn" class="btn btn-mini">Ninguno</button>
+          </div>
+        </div>
+        <div id="motorChecklist" class="motor-checklist"></div>
+        <div class="chart-wrap">
+          <canvas id="anglesChart"></canvas>
+        </div>
+      </div>
+
+      <!-- Lateral: horizonte + compás + batería -->
+      <div class="panel-stack">
+
+        <div class="panel panel-imu">
+          <div class="panel-head"><h2>Inclinación</h2></div>
+          <div class="imu-row">
+            <div class="horizon-wrap">
+              <canvas id="horizonCanvas" width="190" height="190"></canvas>
+              <div class="horizon-readout">
+                <span><b>roll</b> <span id="rollVal">—</span>°</span>
+                <span><b>pitch</b> <span id="pitchVal">—</span>°</span>
+              </div>
+            </div>
+            <div class="compass-wrap">
+              <canvas id="compassCanvas" width="190" height="190"></canvas>
+              <div class="horizon-readout">
+                <span><b>yaw</b> <span id="yawVal">—</span>°</span>
+              </div>
+            </div>
+          </div>
+          <div class="chart-wrap chart-wrap-small">
+            <canvas id="imuChart"></canvas>
+          </div>
+        </div>
+
+        <div class="panel panel-battery">
+          <div class="panel-head"><h2>Batería</h2></div>
+          <div class="battery-body">
+            <div class="battery-gauge">
+              <div id="batteryFill" class="battery-fill"></div>
+              <span id="batteryPct" class="battery-pct">—%</span>
+            </div>
+            <div class="battery-meta">
+              <div><span class="muted">Corriente</span><b id="bmsCorriente">—</b></div>
+              <div><span class="muted">Temp. BMS</span><b id="bmsTemp">—</b></div>
+            </div>
+          </div>
+          <div id="cellsWrap" class="cells-wrap hidden">
+            <span class="muted">Celdas</span>
+            <div id="cellsBars" class="cells-bars"></div>
+          </div>
+        </div>
+
+        <div id="feetPanel" class="panel panel-feet hidden">
+          <div class="panel-head"><h2>Patas apoyadas</h2></div>
+          <div id="feetDiagram" class="feet-diagram"></div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- Tabla de motores -->
+    <section class="panel panel-table">
+      <div class="panel-head">
+        <h2>Detalle por motor</h2>
+        <div class="threshold-control">
+          <label for="torqueThreshold">Alarma de torque (|Nm| &gt;)</label>
+          <input id="torqueThreshold" type="range" min="0.5" max="15" step="0.5" value="5" />
+          <span id="torqueThresholdVal">5.0</span>
+        </div>
+      </div>
+      <div class="table-scroll">
+        <table id="motorTable">
+          <thead>
+            <tr>
+              <th>#</th><th>Motor</th><th>Ángulo</th><th>Vel.</th><th>Torque</th><th>Temp.</th>
+            </tr>
+          </thead>
+          <tbody id="motorTableBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <p class="disclaimer">
+      ⚠️ En el simulador, <b>ángulo</b>, <b>velocidad</b> y <b>yaw</b> son datos reales;
+      <b>torque</b>, <b>temperatura</b>, <b>roll/pitch</b>, <b>fuerzas de pata</b> y <b>batería</b>
+      están derivados del movimiento del robot. Son coherentes con lo que hace, pero no son
+      mediciones — no uses estos umbrales tal cual contra el robot real.
+    </p>
+
+  </main>
+
+  <script src="chart.umd.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
