@@ -59,10 +59,16 @@ try {
 // ---------------------------------------------------------------------------
 // Paleta para asignar un color estable a cada motor
 // ---------------------------------------------------------------------------
+// Colores de los canvas/gráficos (espejo de las variables de style.css)
+const C = {
+  text: '#e9ecef', muted: '#7d8791', grid: '#232a31', tick: '#3a444e',
+  panel: '#0b0e12', accent: '#ffb000', ok: '#3ddc84', warn: '#ff7a1a', danger: '#ff3b30',
+  sky: '#16354d', ground: '#3b2a14',
+};
 const PALETTE = [
-  '#52e3c2', '#f2a23c', '#ef4b4b', '#8b7cf7', '#4ade80',
-  '#38bdf8', '#f472b6', '#facc15', '#fb923c', '#a3e635',
-  '#60a5fa', '#e879f9',
+  '#ffb000', '#e9ecef', '#4cc9f0', '#ff5d5d', '#3ddc84',
+  '#b388ff', '#ff7a1a', '#f6e05e', '#2dd4bf', '#ff8fab',
+  '#8ecae6', '#c0c8d0',
 ];
 function colorForMotor(id) {
   return PALETTE[id % PALETTE.length];
@@ -82,9 +88,9 @@ const imuChart = new Chart(el('imuChart').getContext('2d'), {
   data: {
     labels: [],
     datasets: [
-      lineDataset('roll', '#52e3c2'),
-      lineDataset('pitch', '#f2a23c'),
-      lineDataset('yaw', '#8b7cf7'),
+      lineDataset('roll', C.accent),
+      lineDataset('pitch', '#4cc9f0'),
+      lineDataset('yaw', C.text),
     ],
   },
   options: baseLineOptions('°'),
@@ -109,10 +115,10 @@ function baseLineOptions(unit) {
     animation: false,
     interaction: { mode: 'nearest', intersect: false },
     scales: {
-      x: { ticks: { color: '#7c8b9a', maxTicksLimit: 8 }, grid: { color: '#1e2832' } },
+      x: { ticks: { color: C.muted, maxTicksLimit: 8 }, grid: { color: C.grid } },
       y: {
-        ticks: { color: '#7c8b9a', callback: (v) => v + unit },
-        grid: { color: '#1e2832' },
+        ticks: { color: C.muted, callback: (v) => v + unit },
+        grid: { color: C.grid },
       },
     },
     plugins: {
@@ -133,6 +139,7 @@ function initFromFirstMessage(data) {
   robotSubtitle.textContent = `${(data.modelo || '').toUpperCase()} · ${motorsMeta.length} motores`;
 
   buildMotorChecklist();
+  buildMotorGroups();
 
   // Selección por defecto: algunas articulaciones representativas
   const defaults = motorsMeta.filter((m) =>
@@ -173,11 +180,60 @@ function buildMotorChecklist() {
   });
 }
 
+// Grupos de un click, derivados de los nombres "<pata>_<articulación>" (ej. FR_hip):
+// uno por pata (FR, FL…) y uno por articulación (hip, thigh, calf).
+let motorGroups = []; // [{label, ids, btn}]
+
+function buildMotorGroups() {
+  const box = el('motorGroups');
+  box.innerHTML = '';
+  motorGroups = [];
+  const byPrefix = new Map();
+  const bySuffix = new Map();
+  motorsMeta.forEach((m) => {
+    const i = m.nombre.indexOf('_');
+    if (i < 1) return;
+    const pre = m.nombre.slice(0, i);
+    const suf = m.nombre.slice(i + 1);
+    if (!byPrefix.has(pre)) byPrefix.set(pre, []);
+    if (!bySuffix.has(suf)) bySuffix.set(suf, []);
+    byPrefix.get(pre).push(m.id);
+    bySuffix.get(suf).push(m.id);
+  });
+
+  const addGroups = (map) => {
+    [...map].forEach(([label, ids]) => {
+      if (ids.length === motorsMeta.length) return; // no aporta
+      const btn = document.createElement('button');
+      btn.className = 'btn btn-mini';
+      btn.textContent = label;
+      btn.addEventListener('click', () => {
+        const allOn = ids.every((id) => selectedMotorIds.has(id));
+        ids.forEach((id) => (allOn ? selectedMotorIds.delete(id) : selectedMotorIds.add(id)));
+        rebuildAnglesDatasets();
+        refreshChecklistUI();
+      });
+      box.appendChild(btn);
+      motorGroups.push({ ids, btn });
+    });
+  };
+  addGroups(byPrefix);
+  if (box.children.length && bySuffix.size > 1) {
+    const sep = document.createElement('span');
+    sep.className = 'group-sep';
+    box.appendChild(sep);
+  }
+  addGroups(bySuffix);
+}
+
 function refreshChecklistUI() {
   [...motorChecklist.children].forEach((chip) => {
     const id = Number(chip.dataset.id);
     chip.classList.toggle('active', selectedMotorIds.has(id));
   });
+  motorGroups.forEach((g) =>
+    g.btn.classList.toggle('active', g.ids.every((id) => selectedMotorIds.has(id)))
+  );
 }
 
 function rebuildAnglesDatasets() {
@@ -288,13 +344,13 @@ function drawHorizon(roll, pitch) {
   const pitchOffset = Math.max(-R, Math.min(R, pitch * 2.2));
 
   // cielo
-  ctx.fillStyle = '#1b3a52';
+  ctx.fillStyle = C.sky;
   ctx.fillRect(-200, -200 + pitchOffset, 400, 200);
   // suelo
-  ctx.fillStyle = '#3a2c1b';
+  ctx.fillStyle = C.ground;
   ctx.fillRect(-200, pitchOffset, 400, 200);
   // línea de horizonte
-  ctx.strokeStyle = '#e7edf3';
+  ctx.strokeStyle = C.text;
   ctx.lineWidth = 2;
   ctx.beginPath();
   ctx.moveTo(-200, pitchOffset);
@@ -304,14 +360,14 @@ function drawHorizon(roll, pitch) {
   ctx.restore();
 
   // marco
-  ctx.strokeStyle = '#1e2832';
+  ctx.strokeStyle = C.tick;
   ctx.lineWidth = 3;
   ctx.beginPath();
   ctx.arc(cx, cy, R, 0, Math.PI * 2);
   ctx.stroke();
 
   // referencia del robot (fija, al centro)
-  ctx.strokeStyle = '#f2a23c';
+  ctx.strokeStyle = C.accent;
   ctx.lineWidth = 3;
   ctx.beginPath();
   ctx.moveTo(cx - 28, cy);
@@ -319,7 +375,7 @@ function drawHorizon(roll, pitch) {
   ctx.moveTo(cx + 8, cy);
   ctx.lineTo(cx + 28, cy);
   ctx.stroke();
-  ctx.fillStyle = '#f2a23c';
+  ctx.fillStyle = C.accent;
   ctx.beginPath();
   ctx.arc(cx, cy, 3, 0, Math.PI * 2);
   ctx.fill();
@@ -330,8 +386,8 @@ function drawCompass(yaw) {
   const W = 190, H = 190, cx = W / 2, cy = H / 2, R = 85;
   ctx.clearRect(0, 0, W, H);
 
-  ctx.strokeStyle = '#1e2832';
-  ctx.fillStyle = '#10151c';
+  ctx.strokeStyle = C.tick;
+  ctx.fillStyle = C.panel;
   ctx.lineWidth = 2;
   ctx.beginPath();
   ctx.arc(cx, cy, R, 0, Math.PI * 2);
@@ -339,7 +395,7 @@ function drawCompass(yaw) {
   ctx.stroke();
 
   // marcas cada 45°, etiquetas de grados (no es brújula magnética: es yaw del robot)
-  ctx.fillStyle = '#7c8b9a';
+  ctx.fillStyle = C.muted;
   ctx.font = '10px monospace';
   ctx.textAlign = 'center';
   for (let deg = 0; deg < 360; deg += 45) {
@@ -348,7 +404,7 @@ function drawCompass(yaw) {
     const y1 = cy - Math.cos(rad) * (R - 10);
     const x2 = cx + Math.sin(rad) * (R - 2);
     const y2 = cy - Math.cos(rad) * (R - 2);
-    ctx.strokeStyle = '#334150';
+    ctx.strokeStyle = C.muted;
     ctx.beginPath();
     ctx.moveTo(x1, y1);
     ctx.lineTo(x2, y2);
@@ -357,13 +413,13 @@ function drawCompass(yaw) {
 
   // aguja según yaw
   const rad = (yaw * Math.PI) / 180;
-  ctx.strokeStyle = '#52e3c2';
+  ctx.strokeStyle = C.accent;
   ctx.lineWidth = 3;
   ctx.beginPath();
   ctx.moveTo(cx, cy);
   ctx.lineTo(cx + Math.sin(rad) * (R - 20), cy - Math.cos(rad) * (R - 20));
   ctx.stroke();
-  ctx.fillStyle = '#52e3c2';
+  ctx.fillStyle = C.accent;
   ctx.beginPath();
   ctx.arc(cx, cy, 4, 0, Math.PI * 2);
   ctx.fill();
@@ -377,7 +433,7 @@ function updateBattery(bms) {
   el('batteryPct').textContent = pct + '%';
   const fill = el('batteryFill');
   fill.style.width = pct + '%';
-  fill.style.background = pct > 50 ? '#4ade80' : pct > 20 ? '#f2a23c' : '#ef4b4b';
+  fill.style.background = pct > 50 ? C.ok : pct > 20 ? C.warn : C.danger;
 
   el('bmsCorriente').textContent = bms.corriente + ' mA';
   el('bmsTemp').textContent = bms.temperatura.toFixed(1) + '°C';
