@@ -159,8 +159,11 @@ input[type="number"] { width: 70px; }
   display: grid;
   grid-template-columns: 1.6fr 1fr;
   gap: 16px;
-  align-items: start;
+  align-items: stretch;
 }
+
+.panel-angles { display: flex; flex-direction: column; }
+.panel-angles .chart-wrap { flex: 1; min-height: 320px; }
 
 .panel {
   background: var(--panel);
